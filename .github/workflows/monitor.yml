@@ -1,0 +1,47 @@
+name: DGTR Monitor
+
+on:
+  schedule:
+    # 매일 KST 오전 9시, 오후 6시 (UTC 00:00, 09:00)
+    # 인도 근무시간(IST) 동안 공고가 올라오므로 하루 2회면 충분
+    - cron: "0 0 * * *"
+    - cron: "0 9 * * *"
+  workflow_dispatch: {}   # 수동 실행 버튼
+
+# state.json 자동 커밋을 위한 쓰기 권한
+permissions:
+  contents: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run DGTR monitor
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          NOTIFY_TO: ${{ secrets.NOTIFY_TO }}
+        run: python monitor.py
+
+      - name: Commit state.json
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [[ -n "$(git status --porcelain state.json)" ]]; then
+            git add state.json
+            git commit -m "chore: update state.json [skip ci]"
+            git push
+          else
+            echo "state.json 변화 없음 — 커밋 생략"
+          fi
