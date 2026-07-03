@@ -1,88 +1,86 @@
-# DGTR/DGFT 인도 무역규제 모니터 (2차 그물)
+[PROJECT_CONTEXT.md](https://github.com/user-attachments/files/29617844/PROJECT_CONTEXT.md)
+# 인도 무역규제 모니터 (2차 그물) — DGTR + DGFT 통합
 
-인도 무역규제 감시 **3중 그물** 구조의 두 번째 그물. DGTR(무역구제총국)의
-반덤핑 조사를 감시해, PIB(1차)에 안 잡히는 실무 공고를 잡아낸다.
+인도 무역규제 감시 **3중 그물** 구조의 두 번째 그물.
+동관(copper) 수출기업 관점에서, 인도의 무역구제·수입정책 변화를 실시간 감시한다.
 
-| 단계 | 소스 | 성격 | 타이밍 | 저장소 |
-|------|------|------|--------|--------|
-| 1차 그물 | PIB (RSS) | 정부 발표 | 가장 빠름 | `India_PIB-monitor` |
-| **2차 그물** | **DGTR/DGFT** | **무역 실무 공고** | **중간** | **이 저장소** |
-| 3차 그물 | eGazette (관보) | 법적 확정 | 가장 늦음 | `egazette_monitor` |
+| 단계 | 소스 | 성격 | 저장소 |
+|------|------|------|--------|
+| 1차 | PIB (RSS) | 정부 보도자료 | `India_PIB-monitor` |
+| **2차** | **DGTR + DGFT** | **무역 실무 공고** | **이 저장소** |
+| 3차 | eGazette (관보) | 법적 확정 | `egazette_monitor` |
 
-## 왜 필요한가
-DGTR 반덤핑 조사 개시(initiation)는 수출기업에 직격탄이지만, 언론이
-관심 없는 기술적 공고라 PIB 보도자료에 누락되기 쉽다. DGTR 사이트를
-직접 감시해야 하는 이유다.
+## 감시 목적 (핵심)
+동관을 제조해 인도로 수출한다. **인도가 동관 수입을 막는 규제 = 수출길 차단.**
+그래서 아래 두 기관을 동관(copper) 중심으로 감시한다.
+- **DGTR** (무역구제총국): 반덤핑 조사. 동관에 반덤핑 관세가 붙으면 가격경쟁력 상실.
+- **DGFT** (대외무역총국): 수입정책. 동관(Chapter 74)이 Free→Restricted 되거나
+  BIS/QCO 인증이 의무화되면 통관 자체가 막힘.
 
-## 무엇을 감시하나
-- **대상 페이지:** https://www.dgtr.gov.in/en/anti-dumping-investigation-in-india
-- **감지 단위:** 케이스 슬러그(URL). **이 목록엔 날짜가 없어** 날짜 비교가
-  불가능하므로, `/anti-dumping-cases/{슬러그}`를 고유 ID로 삼아 신규 여부를 판단한다.
-  → 1차 그물(PIB, 날짜 기반)과 근본적으로 다른 설계 포인트.
-- **분류:** 신규 항목은 **전부** 추적하되, copper 키워드에 걸리면 🔴 긴급,
-  아니면 ⚪ 일반으로 나눠 알림.
-  - DGTR은 반덤핑 전문 기관이라 조사 건수 자체가 적음(연 수십 건, 동관은 드묾).
-    노이즈가 적으므로 필터는 "감지"가 아니라 "분류"에만 쓴다 — 놓침 방지 우선.
+## 소스별 접근 방식 (중요)
 
-## 감시 키워드
-`copper`, `copper tube`, `copper alloy`, `refined copper`, `brass`, `bronze`
-- 인도는 자국 규격(IS)·HS코드로 발표하므로 한국 규격코드(KS D5301 등)는 무의미.
-  인도가 실제로 쓸 **영문 제품명**으로 감시한다.
+### DGTR — 직접 접근 ✅
+- URL: https://www.dgtr.gov.in/en/anti-dumping-investigation-in-india
+- 서버사이드 렌더링(Drupal). requests + BeautifulSoup으로 충분. Playwright 불필요.
+- 고유 ID: 케이스 슬러그(`/anti-dumping-cases/{슬러그}`). 날짜 없어 슬러그로 신규 판단.
+- 항목 링크는 모두 `/anti-dumping-cases/` 포함 → 왼쪽 메뉴 잡링크와 구분.
+
+### DGFT — caalley 미러 경유 ⚠️
+- **공식 사이트(dgft.gov.in/CP/)는 로그인 대시보드(JS 렌더링)** → requests로 목록 못 긁음.
+  공개 JSON 백엔드도 없음. Playwright는 무겁고 셀렉터 취약 → 채택 안 함.
+- **대안: caalley.com이 DGFT 전 카테고리(Notification/PublicNotice/Circular/TradeNotice)를
+  최신순 텍스트로 미러링.** requests로 안정적으로 긁힘. (APEDA 미러는 농산물 편향이라 탈락.)
+- URL: https://caalley.com/legal-updates/corporate-laws/dgft
+- 고유 ID: `카테고리:번호:회계연도`. 번호가 매년 리셋되므로 연도 태그로 충돌 방지.
+- **미러 리스크 관리:** 남의 사이트이므로 "조용한 0건" 방어를 강하게(임계치 15).
+  구조가 바뀌면 즉시 경보. DGTR과 독립적으로 방어(한쪽 깨져도 다른 쪽 정상).
+
+## 감시 키워드 (monitor.py 상단에서 수정)
+### (A) 동관 직접 — 양쪽 소스 공통
+`copper`, `brass`, `bronze`, `refined copper`, `chapter 74`, `nfmims`,
+`7407`~`7412` (동관·봉·선·판 HS코드)
+- 인도 공고는 한국 규격코드(KS) 아닌 **영문명 + Chapter + HS코드**로 표기.
+- `nfmims` = 비철금속 수입모니터링. 이 단어 뜨면 동 수입규제 관련.
+
+### (B) 제도 키워드 — DGFT에서만 보조 신호
+`qco`, `quality control order`, `bis requirement`,
+`compulsory registration`, `import monitoring`
+- 동관에 BIS/QCO가 걸리면 수출 직격탄. 단독으론 노이즈 많아 DGFT에만 적용.
+
+## 알림 로직
+- 양쪽 소스를 한 번에 돌려, **동관 매칭된 것만 한 메일로 통합** 발송.
+- 무관 항목(농산물·타 화학물질 등)은 state.json에만 기록, 메일 없음.
+- 매칭 0건이면 완전 조용.
+
+## state.json 구조
+```json
+{
+  "DGTR": ["DGTR:slug1", ...],
+  "DGFT": ["DGFT:Notification:61:2015-2020", ...],
+  "empty_streak": {"DGTR": 0, "DGFT": 0},
+  "last_run": "..."
+}
+```
+- **[] 로 비우면 전체 초기화** → 다음 실행에 현재 목록 전부 재평가(PIB 방식 통일).
 
 ## 기술 스택 (기존 2개와 통일)
-- Python 3.12
-- GitHub Actions (Public 저장소, cron 무료 실행) — 하루 2회 (KST 09시/18시)
-- Gmail SMTP 알림 (앱 비밀번호, GitHub Secrets)
-- `state.json` 중복 방지 (Actions가 자동 커밋)
-- 별도 저장소 독립 운영 (장애 격리)
-
-## 접근 방식 결정 기록
-- **RSS 없음** 확인 → HTML 파싱.
-- **Playwright 불필요** — DGTR은 서버사이드 렌더링(Drupal)이라 HTML에 데이터가
-  그대로 있음. `requests` + `BeautifulSoup`으로 충분. (eGazette와 달리 JS 렌더링 아님.)
-- 항목 링크는 모두 `/anti-dumping-cases/`를 포함 → 이 선택자로 왼쪽 메뉴
-  잡링크(checklist 등)와 구분.
-
-## 1차 그물에서 얻은 교훈 (반영 완료)
-1. **브라우저 UA 필수** — 기본 UA는 403. 단 데이터센터 IP는 UA 붙여도 403이고,
-   **GitHub Actions IP는 통과**. (로컬/컨테이너에서 403 나도 정상)
-2. **조용한 0건이 최대 위험** — 구조가 바뀌면 에러 없이 0건만 반환.
-   → `MIN_EXPECTED_ITEMS`(=10) 미만이면 "구조 깨짐" 경보 발송,
-   이때 `seen_slugs`는 갱신하지 않아 오염 방지.
-3. **한국 규격코드 무의미** — 인도 IS/HS코드·영문 제품명으로 감시.
-4. **파싱 전 수신 내용 로그 출력** — 상위 5건 제목을 로그에 찍어 눈으로 확인.
-
-## 파일 구성
-```
-monitor.py                    # 메인 (수집→파싱→분류→알림→state)
-requirements.txt
-state.json                    # {seen_slugs, empty_streak, last_run}
-.github/workflows/monitor.yml # cron 자동 실행 + state 자동 커밋
-```
+Python 3.12 · GitHub Actions(하루 2회, KST 09/18시) · Gmail SMTP(Secrets) ·
+state.json 자동 커밋 · 별도 저장소 독립 운영(장애 격리).
 
 ## 설치 (GitHub Secrets)
-저장소 Settings → Secrets and variables → Actions에 등록:
-- `GMAIL_USER` — 발송 Gmail 주소
-- `GMAIL_APP_PASSWORD` — Gmail 앱 비밀번호(16자리)
-- `NOTIFY_TO` — 수신 주소(미설정 시 GMAIL_USER로 발송, 쉼표로 여러 명 가능)
+`GMAIL_USER`, `GMAIL_APP_PASSWORD`, `NOTIFY_TO`
 
-## 동작 로직
-1. `state.json` 로드 → 이미 본 슬러그 집합.
-2. DGTR 목록 페이지 GET (UA 헤더).
-3. `/anti-dumping-cases/` 링크 파싱 → 슬러그·제목 추출.
-4. **안전장치:** 파싱 건수 < 10 → 구조 깨짐 경보, seen 미갱신 후 종료.
-5. **첫 실행:** 현재 목록 전부를 기준선으로 등록만, 알림 없음(폭탄 방지).
-6. 신규 슬러그 추출 → copper 키워드로 🔴/⚪ 분류 → 이메일.
-7. `state.json` 갱신 → Actions가 커밋.
+## 교훈 반영 (1차 그물)
+1. 브라우저 UA 필수 (데이터센터 IP는 403, GitHub Actions IP는 통과).
+2. 조용한 0건 = 최대 위험 → 소스별 임계치 미만이면 구조 깨짐 경보, seen 미갱신.
+3. 한국 규격코드 무의미 → 인도 영문명·Chapter·HS코드로 감시.
+4. 파싱 전 상위 5건 제목 로그 출력으로 눈 확인.
 
-## 로컬 테스트
-```bash
-pip install -r requirements.txt
-python monitor.py   # 컨테이너/로컬은 403 날 수 있음(정상). Actions에서 정상 동작.
-```
-Gmail Secrets 없이 실행하면 메일 대신 콘솔에 미리보기가 출력된다.
+## 배경 지식: 동관 수입규제 현황
+- 인도는 2021년부터 동(Chapter 74) 수입에 **NFMIMS 등록 의무** 부과
+  (DGFT Notification 61/2015-2020). 앞으로 위협은 이게 강화되거나(등록→제한→금지),
+  BIS 인증이 추가되는 방향. 이 모니터가 그 변화를 잡는다.
 
-## TODO — DGFT (2차 그물 확장)
-DGTR 완성·안정화 후 DGFT(대외무역총국, 수입정책 공고) 추가 예정.
-DGFT는 Notification/Public Notice 페이지 구조를 별도 확인해야 함
-(RSS 유무·requests 접근 가능 여부부터 점검).
+## TODO (3중 그물 확장 아이디어)
+- BIS 사이트 직접 감시 (품질인증 의무화 = 동관 수출 직격탄, 별도 채널 필요)
+- DGFT 공식 사이트 Playwright 백업 (caalley 미러 영구 장애 대비)
