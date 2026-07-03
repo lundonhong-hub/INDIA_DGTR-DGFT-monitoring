@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-인도 무역규제 모니터 (2차 그물) — DGTR + DGFT 공식 직접 통합
-- DGTR: 반덤핑 조사 목록 (dgtr.gov.in, 직접 접근)
-- DGFT: 공식 Notification 페이지(dgft.gov.in/CP/?opt=notification) 직접 접근
-- 동관(copper) 키워드 매칭된 것만 메일 발송, 무관은 state만 기록
-- state.json을 [] 로 비우면 전체 재알림 (PIB 방식 통일)
+인도 무역규제 모니터 — DGTR + DGFT 공식 사이트 직접 모니터링
 
-교훈 반영:
-  1. 브라우저 UA 필수 (GitHub Actions IP는 통과)
-  2. 조용한 0건 방어: 소스별 임계치 미만이면 구조 깨짐 경보
-  3. 한국 규격코드(KS) 무의미 → 인도 영문명·Chapter·HS코드로 감시
-  4. 파싱 전 제목 로그 출력으로 눈 확인
+핵심 변경:
+- DGFT는 미러 사이트를 사용하지 않음.
+- 공식 DGFT Notification 페이지를 직접 호출:
+  1) https://www.dgft.gov.in/CP/index.jsp?opt=notification
+  2) https://www.dgft.gov.in/CP/?opt=notification
+- requests가 DGFT에서 502를 받을 경우, GitHub Actions의 curl로 한 번 더 재시도.
 """
 
 import os
@@ -20,33 +17,40 @@ import sys
 import json
 import smtplib
 import datetime
+import subprocess
+from urllib.parse import urljoin
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
 
 # ─────────────────────────────────────────────
-# 감시 키워드 — 여기만 수정하면 됩니다
+# 감시 키워드
 # ─────────────────────────────────────────────
-# (A) 동관 직접 키워드 — 인도 공고는 영문명 + Chapter + HS코드로 표기
 KEYWORDS_PRODUCT = [
     "copper",
+    "copper tube",
+    "copper tubes",
+    "copper pipe",
+    "copper pipes",
     "brass",
     "bronze",
     "refined copper",
-    "chapter 74",       # 동과 그 제품 (ITC HS)
-    "nfmims",           # 비철금속 수입모니터링 (동 수입 시스템)
-    "7407", "7408", "7409", "7410", "7411", "7412",  # 동관·봉·선·판 HS코드
+    "chapter 74",
+    "cth 74",
+    "itc hs 74",
+    "nfmims",
+    "7407", "7408", "7409", "7410", "7411", "7412",
 ]
 
-# (B) 제도 키워드 — 동관에 걸리면 수출 직격탄인 규제 유형
-#     단독으론 노이즈 많아, DGFT에서만 보조 신호로 사용
 KEYWORDS_REGIME = [
-    "qco",              # 품질관리명령 (Quality Control Order)
+    "qco",
     "quality control order",
+    "quality control orders",
+    "bis",
     "bis requirement",
+    "bis requirements",
     "compulsory registration",
     "import monitoring",
 ]
@@ -54,35 +58,48 @@ KEYWORDS_REGIME = [
 # ─────────────────────────────────────────────
 # 소스 설정
 # ─────────────────────────────────────────────
-DGFT_NOTIFICATION_URL = "https://www.dgft.gov.in/CP/?opt=notification"
-
 SOURCES = {
     "DGTR": {
-        # 단일 소스 (공식 사이트 직접 접근)
         "urls": ["https://www.dgtr.gov.in/en/anti-dumping-investigation-in-india"],
-        "min_items": 10,   # 항상 15건 차 있음
+        "min_items": 10,
         "parser": "parse_dgtr",
     },
     "DGFT": {
-        # 공식 DGFT Notification 화면을 직접 감시합니다.
-        # 화면에서 보이는 표(Number / Year / Description / Date / Attachment)를 그대로 파싱합니다.
-        # 예: 22/2026-27 "Amendment in Import Policy under Chapter 74 ..."
-        "urls": [DGFT_NOTIFICATION_URL],
-        "min_items": 15,
-        "parser": "parse_dgft",
+        # 중요: /CP/?opt=notification 에서 GitHub Actions가 502를 받는 경우가 있어
+        # index.jsp 명시 URL을 1순위로 사용합니다.
+        "urls": [
+            "https://www.dgft.gov.in/CP/index.jsp?opt=notification",
+            "https://www.dgft.gov.in/CP/?opt=notification",
+        ],
+        "min_items": 10,
+        "parser": "parse_dgft_official",
     },
 }
 
 STATE_FILE = "state.json"
 
-HEADERS = {
+BASE_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
+        "Chrome/126.0.0.0 Safari/537.36"
     ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9,ko;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+}
+
+DGFT_HEADERS = {
+    **BASE_HEADERS,
+    "Referer": "https://www.dgft.gov.in/CP/",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
 }
 
 GMAIL_USER = os.environ.get("GMAIL_USER", "")
@@ -104,11 +121,9 @@ def load_state() -> dict:
         try:
             with open(STATE_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            # [] 로 비우면 전체 초기화 (PIB 방식)
             if isinstance(data, list):
                 log("state.json이 [] 형식 → 전체 초기화로 인식")
                 return default
-            # 누락 키 보정
             for k in ("DGTR", "DGFT"):
                 data.setdefault(k, [])
             data.setdefault("empty_streak", {})
@@ -124,147 +139,179 @@ def save_state(state: dict) -> None:
         json.dump(state, f, ensure_ascii=False, indent=2)
 
 
+def _headers_for(url: str) -> dict:
+    if "dgft.gov.in/CP/" in url:
+        return DGFT_HEADERS
+    return BASE_HEADERS
+
+
+def _looks_like_dgft_notification_page(html: str) -> bool:
+    low = html.lower()
+    return (
+        "notification" in low
+        and "sl.no" in low
+        and "attachment" in low
+        and ("content.dgft.gov.in" in low or "chapter" in low)
+    )
+
+
+def _fetch_with_requests(url: str) -> str:
+    headers = _headers_for(url)
+    with requests.Session() as s:
+        # DGFT는 첫 접속 쿠키/세션 영향이 있을 수 있어 CP 루트도 먼저 찍습니다.
+        if "dgft.gov.in/CP/" in url:
+            try:
+                s.get("https://www.dgft.gov.in/CP/", headers=headers, timeout=20, allow_redirects=True)
+            except Exception:
+                pass
+        r = s.get(url, headers=headers, timeout=45, allow_redirects=True)
+        log(f"STATUS {r.status_code}, LEN {len(r.text)}")
+        if r.status_code >= 400:
+            raise requests.HTTPError(f"HTTP {r.status_code}", response=r)
+        return r.text
+
+
+def _fetch_with_curl(url: str) -> str:
+    """GitHub Actions에서 requests는 502인데 curl은 통과하는 경우 대비."""
+    log(f"curl retry {url}")
+    cmd = [
+        "curl",
+        "-L",
+        "--compressed",
+        "--retry", "2",
+        "--retry-delay", "2",
+        "--connect-timeout", "20",
+        "--max-time", "60",
+        "-A", BASE_HEADERS["User-Agent"],
+        "-H", "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "-H", "Accept-Language: en-US,en;q=0.9,ko;q=0.8",
+        "-H", "Referer: https://www.dgft.gov.in/CP/",
+        "-H", "Cache-Control: no-cache",
+        url,
+    ]
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=75)
+    html = p.stdout or ""
+    if p.returncode != 0:
+        raise RuntimeError(f"curl failed rc={p.returncode}: {(p.stderr or '')[:200]}")
+    log(f"CURL OK, LEN {len(html)}")
+    return html
+
+
 def fetch(url: str) -> str:
     log(f"GET {url}")
-    r = requests.get(url, headers=HEADERS, timeout=30)
-    log(f"STATUS {r.status_code}, LEN {len(r.text)}")
-    r.raise_for_status()
-    return r.text
+    try:
+        html = _fetch_with_requests(url)
+    except Exception as e:
+        log(f"  ↳ requests 실패: {type(e).__name__}: {e}")
+        if "dgft.gov.in/CP/" not in url:
+            raise
+        html = _fetch_with_curl(url)
+
+    # DGFT의 경우 200이어도 차단/오류 HTML일 수 있으므로 내용 검증
+    if "dgft.gov.in/CP/" in url and not _looks_like_dgft_notification_page(html):
+        snippet = re.sub(r"\s+", " ", BeautifulSoup(html, "lxml").get_text(" ", strip=True))[:250]
+        raise RuntimeError(f"DGFT Notification 표를 찾지 못함: {snippet}")
+    return html
 
 
 def fetch_with_fallback(urls: list) -> tuple:
-    """urls를 순서대로 시도. 첫 성공(html, url) 반환. 전부 실패면 (None, None)."""
     for url in urls:
         try:
             html = fetch(url)
             return html, url
         except Exception as e:
-            log(f"  ↳ 실패, 다음 소스 시도: {type(e).__name__}")
+            log(f"  ↳ 실패, 다음 URL 시도: {type(e).__name__}: {str(e)[:160]}")
     return None, None
 
 
 # ─────────────────────────────────────────────
-# 파서 — 소스별
+# 파서
 # ─────────────────────────────────────────────
 def parse_dgtr(html: str) -> list:
-    """DGTR: /anti-dumping-cases/ 링크. 슬러그가 고유 ID."""
     soup = BeautifulSoup(html, "lxml")
     items, seen_local = [], set()
     for a in soup.select('a[href*="/anti-dumping-cases/"]'):
         href = a.get("href", "").strip()
-        title = a.get_text(strip=True)
+        title = a.get_text(" ", strip=True)
         if not href or not title:
             continue
         slug = href.rstrip("/").split("/")[-1]
         if not slug or slug in seen_local:
             continue
         seen_local.add(slug)
-        if href.startswith("/"):
-            href = "https://www.dgtr.gov.in" + href
+        href = urljoin("https://www.dgtr.gov.in", href)
         items.append({"uid": f"DGTR:{slug}", "title": title, "url": href})
     return items
 
 
-def parse_dgft(html: str, source_url: str = "") -> list:
-    """DGFT 공식 Notification 표를 직접 파싱합니다.
-
-    대상 화면:
-      https://www.dgft.gov.in/CP/?opt=notification
-
-    화면 컬럼:
-      Sl.No. / Number / Year / Description / Date / CRT DT / Attachment
-
-    기존 stargroup/caalley 미러는 사용하지 않습니다.
-    """
-    return _parse_dgft_official_notification(html, source_url or DGFT_NOTIFICATION_URL)
+def _clean(s: str) -> str:
+    return re.sub(r"\s+", " ", (s or "")).strip()
 
 
-def _extract_first_link(row, base_url: str) -> str:
-    """행 안의 첫 다운로드 링크를 절대 URL로 반환합니다."""
-    a = row.find("a", href=True)
-    if a and a.get("href"):
-        return urljoin(base_url, a["href"].strip())
-
-    # 일부 사이트는 onclick 안에 URL을 넣는 경우가 있어 방어적으로 처리
-    for tag in row.find_all(True):
-        onclick = tag.get("onclick", "") or ""
-        m = re.search(r"['\"](https?://[^'\"]+|/[^'\"]+\.pdf[^'\"]*)['\"]", onclick, re.I)
-        if m:
-            return urljoin(base_url, m.group(1))
-
-    return base_url
-
-
-def _parse_dgft_official_notification(html: str, source_url: str = DGFT_NOTIFICATION_URL) -> list:
-    """공식 DGFT Notification 페이지의 HTML 표를 파싱합니다."""
+def parse_dgft_official(html: str) -> list:
+    """DGFT 공식 Notification 표 직접 파싱."""
     soup = BeautifulSoup(html, "lxml")
     items, seen_local = [], set()
 
-    for tr in soup.select("table tr"):
+    for tr in soup.find_all("tr"):
         tds = tr.find_all("td")
-        if len(tds) < 6:
+        if len(tds) < 5:
             continue
 
-        cols = [td.get_text(" ", strip=True) for td in tds]
-        # 기대 컬럼: 0 Sl.No. / 1 Number / 2 Year / 3 Description / 4 Date / 5 CRT DT / 6 Attachment
-        sl_no = cols[0]
-        number = cols[1] if len(cols) > 1 else ""
-        year = cols[2] if len(cols) > 2 else ""
-        desc = cols[3] if len(cols) > 3 else ""
-        date = cols[4] if len(cols) > 4 else ""
-        crt_dt = cols[5] if len(cols) > 5 else ""
+        cells = [_clean(td.get_text(" ", strip=True)) for td in tds]
+        # 화면 구조:
+        # 0 Sl.No, 1 Number, 2 Year, 3 Description, 4 Date, 5 CRT DT, 6 Attachment
+        number = cells[1] if len(cells) > 1 else ""
+        year = cells[2] if len(cells) > 2 else ""
+        desc = cells[3] if len(cells) > 3 else ""
+        date = cells[4] if len(cells) > 4 else ""
 
-        # 헤더/잡음 행 제거
-        if not re.search(r"\d", sl_no):
+        if not re.search(r"\d", number):
             continue
-        if not number or not desc:
+        if not desc or len(desc) < 8:
             continue
-        if "description" in desc.lower():
+        # 날짜가 dd/mm/yyyy 구조가 아니면 헤더/잡행 가능성
+        if not re.search(r"\d{2}/\d{2}/\d{4}", date):
             continue
 
-        pdf_url = _extract_first_link(tr, source_url)
+        a = tr.find("a", href=True)
+        href = a["href"].strip() if a else "https://www.dgft.gov.in/CP/index.jsp?opt=notification"
+        href = urljoin("https://www.dgft.gov.in/CP/", href)
 
-        uid_base = f"{number}:{year}:{date}".strip(":")
-        uid_base = re.sub(r"\s+", "", uid_base)
-        uid = f"DGFT:official:{uid_base}"
-
+        uid = f"DGFT:official:{number}:{year}:{date}"
         if uid in seen_local:
             continue
         seen_local.add(uid)
 
-        title_bits = [
-            f"Notification {number}",
-            f"Year {year}" if year else "",
-            desc,
-            f"Date {date}" if date else "",
-        ]
-        title = " | ".join([x for x in title_bits if x])
-
+        title = f"Notification {number} ({date}) - {desc}"
         items.append({
             "uid": uid,
             "title": title,
-            "url": pdf_url,
+            "url": href,
             "number": number,
             "year": year,
             "date": date,
-            "crt_dt": crt_dt,
             "description": desc,
         })
 
     return items
 
 
-
 # ─────────────────────────────────────────────
 # 분류
 # ─────────────────────────────────────────────
 def classify(title: str, source: str) -> list:
-    """매칭 키워드 반환. DGFT는 제도 키워드도 보조 신호로 사용."""
     low = title.lower()
     hits = [k for k in KEYWORDS_PRODUCT if k in low]
+    # DGFT는 공식 Notification 제목만으로도 "Chapter 74", "QCO/BIS"를 포착해야 함.
     if source == "DGFT":
         hits += [k for k in KEYWORDS_REGIME if k in low]
-    return hits
+    # 중복 제거, 순서 유지
+    out = []
+    for k in hits:
+        if k not in out:
+            out.append(k)
+    return out
 
 
 # ─────────────────────────────────────────────
@@ -273,13 +320,15 @@ def classify(title: str, source: str) -> list:
 def send_email(subject: str, body_html: str) -> None:
     if not (GMAIL_USER and GMAIL_APP_PASSWORD and NOTIFY_TO):
         log("⚠️ Gmail 설정 없음 → 이메일 생략 (로컬 테스트)")
-        log(f"--- 미리보기 ---\n제목: {subject}\n{body_html[:400]}")
+        log(f"--- 미리보기 ---\n제목: {subject}\n{body_html[:700]}")
         return
+
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = GMAIL_USER
     msg["To"] = NOTIFY_TO
     msg.attach(MIMEText(body_html, "html", "utf-8"))
+
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
         server.sendmail(GMAIL_USER, NOTIFY_TO.split(","), msg.as_string())
@@ -290,7 +339,7 @@ def build_email(hits_by_source: dict) -> tuple:
     total = sum(len(v) for v in hits_by_source.values())
     subject = f"🔴 [인도규제] 동관 관련 신규 {total}건 감지"
     parts = ["<h2>🔴 인도 무역규제 — 동관 관련 신규 감지</h2>"]
-    label = {"DGTR": "DGTR 반덤핑 조사", "DGFT": "DGFT 수입정책 공고"}
+    label = {"DGTR": "DGTR 반덤핑 조사", "DGFT": "DGFT 공식 Notification"}
     for src, matched in hits_by_source.items():
         if not matched:
             continue
@@ -304,7 +353,7 @@ def build_email(hits_by_source: dict) -> tuple:
             )
         parts.append("</ul>")
     parts.append(
-        f"<hr><small>인도규제 모니터 (2차 그물: DGTR+DGFT) · "
+        f"<hr><small>인도규제 모니터 · "
         f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}</small>"
     )
     return subject, "\n".join(parts)
@@ -315,7 +364,7 @@ def send_structure_alert(src: str, count: int, threshold: int, streak: int, url:
     body = (
         f"<h2>⚠️ {src} 파서 이상</h2>"
         f"<p>파싱 {count}건 &lt; 임계치 {threshold}. 연속 {streak}회.</p>"
-        f"<p>소스 구조/URL 변경 가능성. 점검 필요.</p>"
+        f"<p>소스 구조/URL 변경 또는 접속 차단 가능성. 점검 필요.</p>"
         f"<p><a href='{url}'>{url}</a></p>"
     )
     send_email(subject, body)
@@ -324,36 +373,38 @@ def send_structure_alert(src: str, count: int, threshold: int, streak: int, url:
 # ─────────────────────────────────────────────
 # 메인
 # ─────────────────────────────────────────────
-def _run_parser(name: str, html: str, source_url: str) -> list:
+def _run_parser(name: str, html: str) -> list:
     if name == "parse_dgtr":
         return parse_dgtr(html)
-    return parse_dgft(html, source_url)
+    if name == "parse_dgft_official":
+        return parse_dgft_official(html)
+    raise ValueError(f"unknown parser: {name}")
 
 
 def process_source(src: str, cfg: dict, state: dict) -> list:
-    """한 소스 처리(폴백 체인). 매칭된 신규 항목 리스트 반환."""
     seen = set(state.get(src, []))
     html, used_url = fetch_with_fallback(cfg["urls"])
+
     if html is None:
-        log(f"❌ [{src}] 모든 소스 수집 실패")
+        log(f"❌ [{src}] 모든 URL 수집 실패")
         streak = state["empty_streak"].get(src, 0) + 1
         state["empty_streak"][src] = streak
         send_structure_alert(src, 0, cfg["min_items"], streak, cfg["urls"][0])
         return []
 
-    items = _run_parser(cfg["parser"], html, used_url)
+    items = _run_parser(cfg["parser"], html)
     count = len(items)
     log(f"[{src}] 파싱 {count}건")
+    log(f"[{src}] 사용 URL: {used_url}")
     for it in items[:5]:
-        log(f"    · {it['title'][:65]}")
+        log(f"    · {it['title'][:95]}")
 
-    # 조용한 0건 방어
     if count < cfg["min_items"]:
         streak = state["empty_streak"].get(src, 0) + 1
         state["empty_streak"][src] = streak
-        log(f"⚠️ [{src}] {count}건 < 임계치 {cfg['min_items']} (연속 {streak}회) → 구조 깨짐 의심")
+        log(f"⚠️ [{src}] {count}건 < 임계치 {cfg['min_items']} (연속 {streak}회)")
         send_structure_alert(src, count, cfg["min_items"], streak, used_url)
-        return []   # seen 미갱신 (오염 방지)
+        return []
     state["empty_streak"][src] = 0
 
     new_items = [it for it in items if it["uid"] not in seen]
@@ -370,10 +421,9 @@ def process_source(src: str, cfg: dict, state: dict) -> list:
 
     log(f"[{src}] 🆕 신규 {len(new_items)}건 (🔴 매칭 {len(matched)} / ⚪ 무관 {len(new_items)-len(matched)})")
 
-    # seen 갱신 (매칭·무관 모두)
     for it in new_items:
         seen.add(it["uid"])
-    state[src] = list(seen)
+    state[src] = sorted(seen)
     return matched
 
 
