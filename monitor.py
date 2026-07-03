@@ -112,6 +112,9 @@ def parse_items(html: str) -> list:
         if not slug or slug in seen_local:
             continue
         seen_local.add(slug)
+        # 상대경로(/en/...)이면 도메인 붙여서 절대 URL로 정규화
+        if href.startswith("/"):
+            href = "https://www.dgtr.gov.in" + href
         items.append({"slug": slug, "title": title, "url": href})
     return items
 
@@ -217,8 +220,9 @@ def main() -> int:
         state["empty_streak"] = 0
 
     # 첫 실행: 현재 목록을 전부 seen에 등록만 하고 알림은 보내지 않음(폭탄 방지)
-    first_run = False  
-  # first_run = len(seen) == 0
+    # 단, FORCE_NOTIFY=1 이면 첫 실행에도 알림을 보냄(메일 배관 테스트용).
+    force_notify = os.environ.get("FORCE_NOTIFY", "") == "1"
+    first_run = (len(seen) == 0) and not force_notify
     new_items = [it for it in items if it["slug"] not in seen]
 
     if first_run:
