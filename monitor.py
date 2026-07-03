@@ -111,6 +111,45 @@ NOTIFY_TO = os.environ.get("NOTIFY_TO", GMAIL_USER)
 # ─────────────────────────────────────────────
 # 유틸
 # ─────────────────────────────────────────────
+def send_telegram(matches):
+    """텔레그램으로 알림 발송 (PDF도 첨부)."""
+    token = os.environ.get("TELEGRAM_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    if not token or not chat_id:
+        print("[텔레그램] 토큰/chat_id 없음 → 건너뜀")
+        return
+
+    api = f"https://api.telegram.org/bot{token}"
+
+    for m in matches:
+        # 본문 메시지
+        text = (
+            f"🔔 <b>인도 eGazette 신규 공보</b>\n\n"
+            f"[{', '.join(m['_matched'])}] 매칭\n"
+            f"<b>{m['subject'][:200]}</b>\n"
+            f"부처: {m.get('ministry','')}\n"
+            f"ID: {m['gazette_id']}\n"
+            f"PDF: {m.get('_pdf_url','')}"
+        )
+        try:
+            requests.post(f"{api}/sendMessage", data={
+                "chat_id": chat_id, "text": text, "parse_mode": "HTML",
+                "disable_web_page_preview": True,
+            }, timeout=30)
+
+            # PDF 있으면 문서로 첨부 (텔레그램 한도 50MB — 여유로움)
+            if m.get("_pdf_bytes"):
+                requests.post(f"{api}/sendDocument",
+                    data={"chat_id": chat_id},
+                    files={"document": (pdf_filename(m), m["_pdf_bytes"], "application/pdf")},
+                    timeout=60)
+        except Exception as e:
+            print(f"[텔레그램 전송 실패] {m['gazette_id']}: {str(e)[:60]}")
+
+    print(f"[텔레그램 발송] {len(matches)}건 → chat {chat_id}")
+
+
+
 def log(msg: str) -> None:
     ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{ts}] {msg}", flush=True)
@@ -425,6 +464,7 @@ def send_structure_alert(src: str, count: int, threshold: int, streak: int, url:
         f"<p><a href='{url}'>{url}</a></p>"
     )
     send_email(subject, body)
+    send_telegram(new_matches)
 
 
 # ─────────────────────────────────────────────
@@ -496,10 +536,12 @@ def main() -> int:
     if total > 0:
         subject, body = build_email(results_by_source)
         send_email(subject, body)
+        send_telegram(new_matches)
     elif any_failed:
         log("동관 관련 신규는 없지만 일부 소스 수집 실패")
         subject, body = build_email(results_by_source)
         send_email(subject.replace("신규 0건 감지", "수집 실패/신규 0건"), body)
+        send_telegram(new_matches)
     else:
         log("동관 관련 신규 없음 — 메일 없음")
 
