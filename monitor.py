@@ -217,7 +217,8 @@ def main() -> int:
         state["empty_streak"] = 0
 
     # 첫 실행: 현재 목록을 전부 seen에 등록만 하고 알림은 보내지 않음(폭탄 방지)
-    first_run = len(seen) == 0
+    first_run = False  
+  # first_run = len(seen) == 0
     new_items = [it for it in items if it["slug"] not in seen]
 
     if first_run:
