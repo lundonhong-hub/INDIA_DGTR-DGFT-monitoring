@@ -75,7 +75,12 @@ def load_state() -> dict:
     if os.path.exists(STATE_FILE):
         try:
             with open(STATE_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+            # [] 로만 입력해도 초기화로 인식 (PIB 방식과 통일)
+            if isinstance(data, list):
+                log("state.json이 [] 형식 → 초기화로 인식")
+                return {"seen_slugs": [], "empty_streak": 0, "last_run": None}
+            return data
         except Exception as e:
             log(f"⚠️ state.json 읽기 실패, 새로 시작: {e}")
     return {"seen_slugs": [], "empty_streak": 0, "last_run": None}
@@ -219,17 +224,9 @@ def main() -> int:
     else:
         state["empty_streak"] = 0
 
-    # 첫 실행: 현재 목록을 전부 seen에 등록만 하고 알림은 보내지 않음(폭탄 방지)
-    # 단, FORCE_NOTIFY=1 이면 첫 실행에도 알림을 보냄(메일 배관 테스트용).
-    force_notify = os.environ.get("FORCE_NOTIFY", "") == "1"
-    first_run = (len(seen) == 0) and not force_notify
+    # seen이 비어있으면 첫 실행으로 간주 — 알림 바로 발송
+    # (state.json을 [] 로 비우면 언제든 전체 재알림 가능)
     new_items = [it for it in items if it["slug"] not in seen]
-
-    if first_run:
-        log(f"🌱 첫 실행 — 현재 {count}건을 기준선으로 등록 (알림 없음)")
-        state["seen_slugs"] = [it["slug"] for it in items]
-        save_state(state)
-        return 0
 
     if not new_items:
         log("변화 없음 — 신규 항목 0건")
