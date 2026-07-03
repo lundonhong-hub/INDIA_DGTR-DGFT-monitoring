@@ -1,92 +1,96 @@
-[PROJECT_CONTEXT.md](https://github.com/user-attachments/files/29618337/PROJECT_CONTEXT.md)
-# 인도 무역규제 모니터 (2차 그물) — DGTR + DGFT 통합
+# 인도 무역규제 모니터 (2차 그물) — DGTR + DGFT
 
-인도 무역규제 감시 **3중 그물** 구조의 두 번째 그물.
-동관(copper) 수출기업 관점에서, 인도의 무역구제·수입정책 변화를 실시간 감시한다.
+동관(copper) 수출기업 관점에서 인도의 무역구제·수입정책 변화를 하루 2회 자동 감시.
+동관 관련 규제가 뜨는 순간 **이메일 + 텔레그램**으로 즉시 알림.
 
+## 3중 그물 구조에서의 위치
 | 단계 | 소스 | 성격 | 저장소 |
 |------|------|------|--------|
 | 1차 | PIB (RSS) | 정부 보도자료 | `India_PIB-monitor` |
 | **2차** | **DGTR + DGFT** | **무역 실무 공고** | **이 저장소** |
 | 3차 | eGazette (관보) | 법적 확정 | `egazette_monitor` |
 
-## 감시 목적 (핵심)
+## 감시 목적
 동관을 제조해 인도로 수출한다. **인도가 동관 수입을 막는 규제 = 수출길 차단.**
-그래서 아래 두 기관을 동관(copper) 중심으로 감시한다.
-- **DGTR** (무역구제총국): 반덤핑 조사. 동관에 반덤핑 관세가 붙으면 가격경쟁력 상실.
-- **DGFT** (대외무역총국): 수입정책. 동관(Chapter 74)이 Free→Restricted 되거나
-  BIS/QCO 인증이 의무화되면 통관 자체가 막힘.
+- **DGTR**(무역구제총국): 반덤핑 조사. 동관에 반덤핑 관세 → 가격경쟁력 상실.
+- **DGFT**(대외무역총국): 수입정책. 동관(Chapter 74) Free→Restricted, BIS/QCO 의무화 → 통관 차단.
 
-## 소스별 접근 방식 (중요)
+## 소스별 수집 방식 (최종 확정)
 
-### DGTR — 직접 접근 ✅
+### DGTR — 직접 접속 ✅
 - URL: https://www.dgtr.gov.in/en/anti-dumping-investigation-in-india
-- 서버사이드 렌더링(Drupal). requests + BeautifulSoup으로 충분. Playwright 불필요.
+- Drupal 서버렌더 → requests + BeautifulSoup으로 충분. GitHub Actions IP 통과됨.
 - 고유 ID: 케이스 슬러그(`/anti-dumping-cases/{슬러그}`). 날짜 없어 슬러그로 신규 판단.
-- 항목 링크는 모두 `/anti-dumping-cases/` 포함 → 왼쪽 메뉴 잡링크와 구분.
 
-### DGFT — 공식 사이트 직접 접근 우선 ✅
-- **1순위 공식 URL:** https://www.dgft.gov.in/CP/?opt=notification
-- 현재 공식 페이지는 HTML 안에 `Number / Year / Description / Date / CRT DT / Attachment` 목록과
-  `content.dgft.gov.in` 공식 PDF 링크를 노출한다. 따라서 미러를 primary로 쓰지 않고
-  `requests + BeautifulSoup`으로 공식 페이지를 직접 파싱한다.
-- 고유 ID: `DGFT:official:{Number}:{Year}:{Date}`.
-- 공식 목록 제목에서 1차 키워드 매칭을 수행하고, `Import Policy / Chapter / BIS / QCO` 등
-  넓은 신호가 있으면 공식 PDF 본문도 일부 추출해 `copper`, `chapter 74`, `7411` 등
-  동관 관련 키워드를 추가 확인한다.
-- **fallback:** 공식 사이트 장애, GitHub Actions IP 차단, HTML 구조 변경에 대비해
-  미러는 백업으로만 유지한다.
-  1. **stargroup.in**: 각 공고가 독립 링크(`notification-details-{번호}`) + 요약 내용.
-  2. **caalley.com**: 전 카테고리 텍스트 나열.
-- **리스크 관리:** 공식 + fallback 모두 파싱 건수가 임계치 미만이면 "조용한 0건" 방어가
-  동작하고, seen을 갱신하지 않아 state 오염을 막는다.
+### DGFT — 공식 사이트 + ScraperAPI 경유 ✅ (핵심)
+- URL: https://www.dgft.gov.in/CP/?opt=notification
+- **문제:** 공식 사이트가 GitHub Actions(데이터센터) IP를 차단 → 919바이트 로그인 페이지만 반환.
+  requests·curl 모두 동일하게 막힘(= 세션 문제 아닌 IP 차단). 회장 브라우저(집/회사 IP)에서만 열림.
+- **해결:** **ScraperAPI 무료 플랜**으로 인도 IP(`country_code=in`) 경유 요청 → 차단 우회.
+  결과: STATUS 200, 약 288KB 수신, 232건 파싱 성공.
+- **미러 폐기:** stargroup(2025.1에서 데이터 멈춤)·caalley(선별 게재로 Chapter 74 누락) 모두 신뢰 불가 → 사용 안 함. 공식 단일 소스로 확정.
+- 데이터 구조: `<table id="metaTable">`에 서버렌더. td[1]=공고번호(고유ID), td[3]=제목, td[4]=날짜, td[6]=PDF 원문 링크(content.dgft.gov.in).
+- 고유 ID: 공고번호(예: `22/2026-27`).
+
+## ScraperAPI 설정
+- 무료 플랜: 월 1,000 크레딧 자동 리셋(이월 없음), 최대 5 동시연결. 가입 후 7일간 5,000크레딧.
+- 크레딧 소모: 표준 1 / 봇차단 우회 시 +10. DGFT는 요청당 최대 ~11크레딧 추정.
+- **회장 사용량:** 하루 2회 × 30일 = 60요청. 최대 660크레딧/월 → 무료 1,000 안쪽. **월 0원.**
+- 실패한 요청은 크레딧 차감 안 됨(성공분만 과금).
+- ⚠️ API 키 노출 시 대시보드 → API key → MANAGE에서 Reset 후 GitHub Secret 교체.
 
 ## 감시 키워드 (monitor.py 상단에서 수정)
 ### (A) 동관 직접 — 양쪽 소스 공통
 `copper`, `brass`, `bronze`, `refined copper`, `chapter 74`, `nfmims`,
-`7407`~`7412` (동관·봉·선·판 HS코드)
-- 인도 공고는 한국 규격코드(KS) 아닌 **영문명 + Chapter + HS코드**로 표기.
-- `nfmims` = 비철금속 수입모니터링. 이 단어 뜨면 동 수입규제 관련.
+`7407`~`7412`(동관·봉·선·판 HS코드)
+- 인도 공고는 한국 규격(KS) 아닌 **영문명 + Chapter + HS코드**로 표기.
+### (B) 제도 키워드 — DGFT 보조 신호
+`qco`, `quality control order`, `bis requirement`, `compulsory registration`, `import monitoring`
+- 동관에 BIS/QCO 걸리면 수출 직격탄.
 
-### (B) 제도 키워드 — DGFT에서만 보조 신호
-`qco`, `quality control order`, `bis requirement`,
-`compulsory registration`, `import monitoring`
-- 동관에 BIS/QCO가 걸리면 수출 직격탄. 단독으론 노이즈 많아 DGFT에만 적용.
-
-## 알림 로직
-- 양쪽 소스를 한 번에 돌려, **동관 매칭된 것만 한 메일로 통합** 발송.
-- 무관 항목(농산물·타 화학물질 등)은 state.json에만 기록, 메일 없음.
-- 매칭 0건이면 완전 조용.
+## 알림 로직 (최종)
+- 양쪽 소스를 한 번에 수집 → **동관 매칭된 것만** 이메일 + 텔레그램 발송.
+- 무관 항목(농산물·귀금속 등)은 state에만 기록, 알림 없음.
+- **첫 실행(state=[])이라도 매칭된 항목은 알림 발송.** (232건 전량이 아니라 매칭 소수만 나가므로 폭탄 아님)
+  → 과거엔 첫 실행 시 알림을 전부 억제했으나, 이 때문에 필요한 동관 알림까지 막혀 수정함.
+- 알림 전에 state를 먼저 저장 → 발송 실패해도 다음 실행에서 중복 발송 안 됨.
 
 ## state.json 구조
 ```json
 {
   "DGTR": ["DGTR:slug1", ...],
-  "DGFT": ["DGFT:official:22/2026-27:2026-27:30/06/2026", ...],
+  "DGFT": ["22/2026-27", ...],
   "empty_streak": {"DGTR": 0, "DGFT": 0},
+  "alert_state": {},
   "last_run": "..."
 }
 ```
-- **[] 로 비우면 전체 초기화** → 다음 실행에 현재 목록 전부 재평가(PIB 방식 통일).
+- **[] 로 비우면 전체 재평가** → 현재 목록 중 매칭 항목이 다시 알림됨(테스트용).
+- 평소엔 건드리지 말 것. 비우면 매칭 항목 재발송됨.
 
-## 기술 스택 (기존 2개와 통일)
-Python 3.12 · GitHub Actions(하루 2회, KST 09/18시) · Gmail SMTP(Secrets) ·
-state.json 자동 커밋 · 별도 저장소 독립 운영(장애 격리).
+## 기술 스택
+Python 3.12 · GitHub Actions(하루 2회, KST 09/18시) · Gmail SMTP · 텔레그램 봇 · ScraperAPI(DGFT 전용) · state.json 자동 커밋 · 별도 저장소 독립 운영.
 
-## 설치 (GitHub Secrets)
-`GMAIL_USER`, `GMAIL_APP_PASSWORD`, `NOTIFY_TO`
+## GitHub Secrets (6개)
+| 이름 | 용도 |
+|------|------|
+| `GMAIL_USER` | 발송 Gmail |
+| `GMAIL_APP_PASSWORD` | Gmail 앱 비밀번호 |
+| `NOTIFY_TO` | 수신 주소(쉼표로 복수 가능) |
+| `SCRAPERAPI_KEY` | DGFT 우회용 |
+| `TELEGRAM_TOKEN` | 봇 토큰(@BotFather) |
+| `TELEGRAM_CHAT_ID` | 알림 수신 chat id |
+- YML env에도 위 6개 모두 전달돼야 함(누락 시 해당 알림만 조용히 건너뜀).
 
-## 교훈 반영 (1차 그물)
-1. 브라우저 UA 필수 (데이터센터 IP는 403, GitHub Actions IP는 통과).
-2. 조용한 0건 = 최대 위험 → 소스별 임계치 미만이면 구조 깨짐 경보, seen 미갱신.
-3. 한국 규격코드 무의미 → 인도 영문명·Chapter·HS코드로 감시.
-4. 파싱 전 상위 5건 제목 로그 출력으로 눈 확인.
+## "조용한 0건" 방어
+- 소스별 파싱 건수 < 임계치(DGTR 10 / DGFT 5)면 구조 깨짐 경보.
+- 동일 장애 반복 시 경보 1회만(중복 억제). seen 미갱신으로 오염 방지.
+- DGFT 232건 정상 → 파싱 급감하면 사이트 구조 변경·ScraperAPI 장애 신호.
 
-## 배경 지식: 동관 수입규제 현황
-- 인도는 2021년부터 동(Chapter 74) 수입에 **NFMIMS 등록 의무** 부과
-  (DGFT Notification 61/2015-2020). 앞으로 위협은 이게 강화되거나(등록→제한→금지),
-  BIS 인증이 추가되는 방향. 이 모니터가 그 변화를 잡는다.
+## 배경: 동관 수입규제 현황
+- 인도는 2021년부터 동(Chapter 74) 수입에 **NFMIMS 등록 의무**(Notification 61/2015-2020).
+- 향후 위협: 이 규제 강화(등록→제한→금지) 또는 BIS 인증 추가.
+- 실제 감지 예: **22/2026-27**(Chapter 74 수입정책 개정), **20/2026-27**(QCO/BIS 적용).
 
-## TODO (3중 그물 확장 아이디어)
-- BIS 사이트 직접 감시 (품질인증 의무화 = 동관 수출 직격탄, 별도 채널 필요)
-- DGFT 공식 사이트 구조 변경 시 파서 보강 또는 Playwright 백업 검토
+## TODO (3중 그물 확장)
+- **BIS 채널 직접 감시** — 품질인증 의무화는 동관 수출 최대 위협. DGFT엔 예고만, 실제 발효는 BIS 사이트.
