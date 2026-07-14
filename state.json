@@ -30,6 +30,7 @@
     "DGTR:initiation-anti-dumping-investigation-concerning-imports-certain-antioxidants",
     "DGTR:initiation-anti-dumping-investigation-concerning-imports-cyanuric-chloride-china",
     "DGTR:initiation-anti-dumping-investigation-concerning-imports-hexamine-originating-or",
+    "DGTR:initiation-anti-dumping-investigation-concerning-imports-thermal-paper-or",
     "DGTR:jute-product-originating-or-exported-bangladesh-and-nepal"
   ],
   "DGFT": [
@@ -271,5 +272,5 @@
     "DGFT": 0
   },
   "alert_state": {},
-  "last_run": "2026-07-13T11:50:07.709716"
+  "last_run": "2026-07-14T01:54:23.669987"
 }
