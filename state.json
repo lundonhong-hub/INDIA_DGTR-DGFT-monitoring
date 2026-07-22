@@ -3,6 +3,7 @@
     "DGTR:anti-absorption-investigation-anti-dumping-duty-imposed-imports-glufosinate-and",
     "DGTR:anti-dumping-duty-investigation-concerning-imports-carbon-raiser-made-anthracite",
     "DGTR:anti-dumping-investigation-concerning-imports-4-bromomethyl-2-cyanobiphenyl-also",
+    "DGTR:anti-dumping-investigation-concerning-imports-aceto-acetyl-derivatives-also",
     "DGTR:anti-dumping-investigation-concerning-imports-acetone-republic-singapore",
     "DGTR:anti-dumping-investigation-concerning-imports-calcined-gypsum-powder-0",
     "DGTR:anti-dumping-investigation-concerning-imports-calcined-gypsum-powder-originating",
@@ -114,6 +115,7 @@
     "DGFT:official:23/2026-27:2026-27:13/07/2026",
     "DGFT:official:24/2023:2023-24:03/08/2023",
     "DGFT:official:24/2025-26:2025-26:11/08/2025",
+    "DGFT:official:24/2026-27:2026-27:22/07/2026",
     "DGFT:official:24:2024-25:19/08/2024",
     "DGFT:official:25/2023:2023-24:03/08/2023",
     "DGFT:official:25/2025-26:2025-26:19/08/2025",
@@ -277,5 +279,5 @@
     "DGFT": 0
   },
   "alert_state": {},
-  "last_run": "2026-07-22T02:02:04.456762"
+  "last_run": "2026-07-22T10:57:19.403022"
 }
