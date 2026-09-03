@@ -296,9 +296,11 @@
     "DGFT:official:​​08/2025-2026:2025-26:19/05/2025"
   ],
   "empty_streak": {
-    "DGTR": 0,
+    "DGTR": 1,
     "DGFT": 0
   },
-  "alert_state": {},
-  "last_run": "2026-09-02T13:02:51.793543"
+  "alert_state": {
+    "DGTR": "DGTR|count=0|threshold=10|url=https://www.dgtr.gov.in/en/anti-dumping-investigation-in-india"
+  },
+  "last_run": "2026-09-03T02:29:56.015536"
 }
