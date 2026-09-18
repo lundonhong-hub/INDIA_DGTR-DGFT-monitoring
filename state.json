@@ -22,6 +22,8 @@
     "DGTR:anti-dumping-investigation-concerning-imports-ethambutol-hydrochloride",
     "DGTR:anti-dumping-investigation-concerning-imports-halo-isobutene-isoprene-rubber",
     "DGTR:anti-dumping-investigation-concerning-imports-hot-rolled-flat-products-alloy-0",
+    "DGTR:anti-dumping-investigation-concerning-imports-hydrofluorocarbon-hfc-blends-china",
+    "DGTR:anti-dumping-investigation-concerning-imports-hydrofluorocarbons-hfc-component-r",
     "DGTR:anti-dumping-investigation-concerning-imports-insoluble-sulphur-originating-or",
     "DGTR:anti-dumping-investigation-concerning-imports-linear-low-density-polyethylene",
     "DGTR:anti-dumping-investigation-concerning-imports-moulded-soda-lime-glass-vials",
@@ -47,6 +49,7 @@
     "DGTR:anti-dumping-investigation-imports-biaxially-oriented-polyamide-bopa-film",
     "DGTR:anti-dumping-investigation-imports-medical-examination-rubber-gloves-malaysia",
     "DGTR:anti-dumping-investigation-imports-seamless-tubes-etc-iron-alloy-or-non-alloy",
+    "DGTR:axle-trailers-originating-or-exported-china-pr",
     "DGTR:initiation-anti-dumping-investigation-concerning-imports-certain-antioxidants",
     "DGTR:initiation-anti-dumping-investigation-concerning-imports-cyanuric-chloride-china",
     "DGTR:initiation-anti-dumping-investigation-concerning-imports-hexamine-originating-or",
@@ -306,5 +309,5 @@
     "DGFT": 0
   },
   "alert_state": {},
-  "last_run": "2026-09-18T02:40:48.900410"
+  "last_run": "2026-09-18T13:13:53.348409"
 }
