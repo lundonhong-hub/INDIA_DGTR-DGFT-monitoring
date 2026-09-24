@@ -27,11 +27,13 @@
     "DGTR:anti-dumping-investigation-concerning-imports-hydrofluorocarbons-hfc-component-r",
     "DGTR:anti-dumping-investigation-concerning-imports-insoluble-sulphur-originating-or",
     "DGTR:anti-dumping-investigation-concerning-imports-linear-low-density-polyethylene",
+    "DGTR:anti-dumping-investigation-concerning-imports-montelukast-sodium-originating-or",
     "DGTR:anti-dumping-investigation-concerning-imports-moulded-soda-lime-glass-vials",
     "DGTR:anti-dumping-investigation-concerning-imports-natural-mica-pearl-industries",
     "DGTR:anti-dumping-investigation-concerning-imports-nylon-6-any-form-relative",
     "DGTR:anti-dumping-investigation-concerning-imports-nylon-6-chips-and-granules",
     "DGTR:anti-dumping-investigation-concerning-imports-para-nonylphenol-originating-or",
+    "DGTR:anti-dumping-investigation-concerning-imports-para-tertiary-butyl-phenol",
     "DGTR:anti-dumping-investigation-concerning-imports-phenol-saudi-arabia-singapore",
     "DGTR:anti-dumping-investigation-concerning-imports-phthalic-anhydride-taiwan",
     "DGTR:anti-dumping-investigation-concerning-imports-polyethylene-terephthalate-film",
@@ -313,5 +315,5 @@
     "DGFT": 0
   },
   "alert_state": {},
-  "last_run": "2026-09-24T02:39:54.286591"
+  "last_run": "2026-09-24T13:53:10.110863"
 }
