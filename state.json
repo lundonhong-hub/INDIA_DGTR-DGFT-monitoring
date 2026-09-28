@@ -40,7 +40,9 @@
     "DGTR:anti-dumping-investigation-concerning-imports-nylon-6-any-form-relative",
     "DGTR:anti-dumping-investigation-concerning-imports-nylon-6-chips-and-granules",
     "DGTR:anti-dumping-investigation-concerning-imports-para-nonylphenol-originating-or",
+    "DGTR:anti-dumping-investigation-concerning-imports-para-tert-octyl-phenol-ptop",
     "DGTR:anti-dumping-investigation-concerning-imports-para-tertiary-butyl-phenol",
+    "DGTR:anti-dumping-investigation-concerning-imports-penicillin-g-and-its-salts-peoples",
     "DGTR:anti-dumping-investigation-concerning-imports-pentaerythritol-originating-or-0",
     "DGTR:anti-dumping-investigation-concerning-imports-phenol-saudi-arabia-singapore",
     "DGTR:anti-dumping-investigation-concerning-imports-phthalic-anhydride-taiwan",
@@ -327,5 +329,5 @@
     "DGFT": 0
   },
   "alert_state": {},
-  "last_run": "2026-09-28T03:02:23.428606"
+  "last_run": "2026-09-28T17:08:23.985767"
 }
