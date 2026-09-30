@@ -15,6 +15,7 @@
     "DGTR:anti-dumping-investigation-concerning-imports-belting-fabric-made-80-or-more",
     "DGTR:anti-dumping-investigation-concerning-imports-calcined-gypsum-powder-0",
     "DGTR:anti-dumping-investigation-concerning-imports-calcined-gypsum-powder-originating",
+    "DGTR:anti-dumping-investigation-concerning-imports-ceramic-tablewares-and-kitchen",
     "DGTR:anti-dumping-investigation-concerning-imports-certain-azepine-intermediates-viz",
     "DGTR:anti-dumping-investigation-concerning-imports-certain-flat-rolled-products",
     "DGTR:anti-dumping-investigation-concerning-imports-certain-organophosphonates",
@@ -35,6 +36,7 @@
     "DGTR:anti-dumping-investigation-concerning-imports-internally-grooved-copper-tubes",
     "DGTR:anti-dumping-investigation-concerning-imports-isopropyl-alcohol-european-union",
     "DGTR:anti-dumping-investigation-concerning-imports-linear-low-density-polyethylene",
+    "DGTR:anti-dumping-investigation-concerning-imports-low-ash-metallurgical-coke",
     "DGTR:anti-dumping-investigation-concerning-imports-mobile-covers-originating-or",
     "DGTR:anti-dumping-investigation-concerning-imports-montelukast-sodium-originating-or",
     "DGTR:anti-dumping-investigation-concerning-imports-moulded-soda-lime-glass-vials",
@@ -332,5 +334,5 @@
     "DGFT": 0
   },
   "alert_state": {},
-  "last_run": "2026-09-29T15:11:55.003412"
+  "last_run": "2026-09-30T03:29:20.617809"
 }
