@@ -347,10 +347,8 @@
   ],
   "empty_streak": {
     "DGTR": 0,
-    "DGFT": 1
+    "DGFT": 0
   },
-  "alert_state": {
-    "DGFT": "DGFT|count=0|threshold=5|url=https://www.dgft.gov.in/CP/?opt=notification"
-  },
-  "last_run": "2026-10-18T02:34:45.324296"
+  "alert_state": {},
+  "last_run": "2026-10-18T12:51:21.948961"
 }
