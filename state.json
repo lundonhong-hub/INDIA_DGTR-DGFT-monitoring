@@ -87,7 +87,8 @@
     "DGTR:initiation-anti-dumping-investigation-concerning-imports-hexamine-originating-or",
     "DGTR:initiation-anti-dumping-investigation-concerning-imports-thermal-paper-or",
     "DGTR:initiation-notification-anti-dumping-investigation-concerning-imports",
-    "DGTR:jute-product-originating-or-exported-bangladesh-and-nepal"
+    "DGTR:jute-product-originating-or-exported-bangladesh-and-nepal",
+    "DGTR:suo-moto-anti-dumping-investigation-concerning-imports-aluminium-extrusion"
   ],
   "DGFT": [
     "DGFT:official:01/2023:2024-25:02/04/2024",
@@ -260,9 +261,11 @@
     "DGFT:official:47/2023:2023-24:07/12/2023",
     "DGFT:official:47/2024-25:2024-25:02/01/2025",
     "DGFT:official:47/2025-26:2025-26:04/11/2025",
+    "DGFT:official:47:2026-27:09/11/2026",
     "DGFT:official:48/2023:2023-24:07/12/2023",
     "DGFT:official:48/2024-25:2024-25:04/01/2025",
     "DGFT:official:48/2025-26:2025-26:17/11/2025",
+    "DGFT:official:48:2026-27:09/11/2026",
     "DGFT:official:49/2023:2023-24:07/12/2023",
     "DGFT:official:49/2025-26:2025-26:09/12/2025",
     "DGFT:official:49:2024-25:04/01/2025",
@@ -352,5 +355,5 @@
     "DGFT": 0
   },
   "alert_state": {},
-  "last_run": "2026-11-09T04:03:43.741779"
+  "last_run": "2026-11-09T19:17:48.393296"
 }
